@@ -55,16 +55,12 @@ func (re *Server) Handle(conn net.Conn) {
 	// 用户上线了
 	// 将用户加入到OnlineMap中，然后广播
 
-	user := NewUser(conn)
-	re.mapLock.Lock()
-	re.OnlineMap[user.Name] = user
-	re.mapLock.Unlock()
+	user := NewUser(conn,re)
 
-	// 广播上线信息
-	re.BroadCast(user, "已上线")
+	user.Online() //处理用户上线
+
 
 	// 将当前请求阻塞
-	// select {}  
 	//接受客户端发送的信息
 	go func ()  {
 		buf := make([]byte,4096)
@@ -73,7 +69,7 @@ func (re *Server) Handle(conn net.Conn) {
 			n,err := conn.Read(buf)
 			if n==0{
 				// n 为0 说明客户端主动的关闭了套接字连接
-				re.BroadCast(user,"下线")
+				user.Offline()
 				return
 			}
 			if err !=nil  && err != io.EOF{
@@ -81,7 +77,7 @@ func (re *Server) Handle(conn net.Conn) {
 				return
 			}
 			msg := string(buf[:n-1])
-			re.BroadCast(user,msg)
+			user.DoMessage(msg)  // 用户处理消息
 		}
 	}()
 	
