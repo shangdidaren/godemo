@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"sync"
 )
@@ -50,7 +51,7 @@ func (re *Server) BroadCast(user *User, msg string) {
 
 func (re *Server) Handle(conn net.Conn) {
 	// 处理当前业务
-	fmt.Println("链接成功...")
+	fmt.Println(conn.RemoteAddr().String() + "链接成功...")
 	// 用户上线了
 	// 将用户加入到OnlineMap中，然后广播
 
@@ -61,12 +62,35 @@ func (re *Server) Handle(conn net.Conn) {
 
 	// 广播上线信息
 	re.BroadCast(user, "已上线")
-	select {}
 
+	// 将当前请求阻塞
+	// select {}  
+	//接受客户端发送的信息
+	go func ()  {
+		buf := make([]byte,4096)
+		for {
+		
+			n,err := conn.Read(buf)
+			if n==0{
+				// n 为0 说明客户端主动的关闭了套接字连接
+				re.BroadCast(user,"下线")
+				return
+			}
+			if err !=nil  && err != io.EOF{
+				fmt.Println("Conn Read Err：",err)
+				return
+			}
+			msg := string(buf[:n-1])
+			re.BroadCast(user,msg)
+		}
+	}()
+	
+	
 }
 
 // 启动服务器的接口
 func (re *Server) Start() {
+	fmt.Println("服务器已启动...")
 	// socket listen
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", re.Ip, re.Port))
 	if err != nil {
