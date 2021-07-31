@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"runtime"
 	"sync"
+	"time"
 )
 
 type Server struct {
@@ -55,33 +57,48 @@ func (re *Server) Handle(conn net.Conn) {
 	// 用户上线了
 	// 将用户加入到OnlineMap中，然后广播
 
-	user := NewUser(conn,re)
+	user := NewUser(conn, re)
 
-	user.Online() //处理用户上线
-
+	user.Online()             //处理用户上线
+	isLive := make(chan bool) // 是否超时
 
 	// 将当前请求阻塞
 	//接受客户端发送的信息
-	go func ()  {
-		buf := make([]byte,4096)
+	go func() {
+		buf := make([]byte, 4096)
 		for {
-		
-			n,err := conn.Read(buf)
-			if n==0{
+
+			n, err := conn.Read(buf)
+			if n == 0 {
 				// n 为0 说明客户端主动的关闭了套接字连接
 				user.Offline()
 				return
 			}
-			if err !=nil  && err != io.EOF{
-				fmt.Println("Conn Read Err：",err)
+			if err != nil && err != io.EOF {
+				fmt.Println("Conn Read Err：", err)
 				return
 			}
 			msg := string(buf[:n-1])
-			user.DoMessage(msg)  // 用户处理消息
+			user.DoMessage(msg) // 用户处理消息
+			isLive <- true      // 发送消息就代表isLive 为true
 		}
 	}()
-	
-	
+
+	for {
+		select {
+		case <-isLive:
+			// 当前用户活跃
+			// 重点：符合 就会进入下一循环， 即定时器也会更新
+		case <-time.After(time.Second * 10): // time.After() 定时器，到时间后定时器会往管道中塞值
+			// 超时
+			close(user.C)
+			user.conn.Close()
+
+			// 退出当前go程序
+			runtime.Goexit()
+		}
+	}
+
 }
 
 // 启动服务器的接口
@@ -94,7 +111,6 @@ func (re *Server) Start() {
 		return
 	}
 	defer listener.Close() // close litster socket
-
 
 	go re.ListenMessage()
 	for {
