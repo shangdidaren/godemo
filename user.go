@@ -28,13 +28,30 @@ func (re *User) Offline() {
 	re.server.BroadCast(re, "下线")
 }
 
-// 封装用户处理消息功能
-func (re *User) DoMessage(msg string) {
-	// 这里的处理消息是借助server的广播  暂时！！
-	re.server.BroadCast(re,msg)
+
+// 返回给当前用户信息
+func (re *User) SendMsg(msg string) {
+	re.conn.Write([]byte(msg))
 }
 
-//
+// 封装用户处理消息功能
+func (re *User) DoMessage(msg string) {
+
+	// 协程 ———————— 规则，如果发送who ，就返回给当前用户所有在线用户信息
+	if msg == "who" {
+		re.server.mapLock.Lock()
+		for _, user := range re.server.OnlineMap {
+			re.SendMsg("[" + user.Addr + "] " + user.Name + "在线")
+		}
+		re.server.mapLock.Unlock()
+
+	} else {
+		re.server.BroadCast(re, msg)
+	}
+
+}
+
+// 创建一个用户
 func NewUser(conn net.Conn, server *Server) *User {
 	userAddr := conn.RemoteAddr().String()
 	user := User{
