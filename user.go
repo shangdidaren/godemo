@@ -35,7 +35,7 @@ func (re *User) Offline() {
 
 // 返回给当前用户信息
 func (re *User) SendMsg(msg string) {
-	re.conn.Write([]byte(msg))
+	re.conn.Write([]byte(msg+"\n"))
 }
 
 // 封装用户处理消息功能
@@ -61,6 +61,19 @@ func (re *User) DoMessage(msg string) {
 			re.Name = newName
 		}
 		
+	}else if msg[:3] == "to|" {
+		remoteName := strings.Split(msg,"|")[1]
+		remoteUser,ok := re.server.OnlineMap[remoteName]
+		if !ok{
+			re.SendMsg("用户名不存在！")
+			return
+		}
+		
+		content := strings.Split(msg,"|")[2]
+		if content!= ""{
+			remoteUser.SendMsg(re.Name+"对您说"+content)
+		}
+
 	}else {
 		re.server.BroadCast(re, msg)
 	}
